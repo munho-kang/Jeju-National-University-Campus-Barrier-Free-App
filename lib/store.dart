@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'model.dart';
@@ -27,4 +30,25 @@ Future<void> saveRecords(List<SurveyRecord> r) async {
   if (!await p.setString(_key, encodeRecords(r))) {
     throw StateError('조사 기록을 저장하지 못했습니다');
   }
+}
+
+/// 모든 기록을 파일 하나로 만들어 휴대폰의 공유 기능(카카오톡, 메일, 에어드롭 등)으로 보낸다.
+Future<void> exportRecords(List<SurveyRecord> r) async {
+  final now = DateTime.now();
+  String two(int v) => v.toString().padLeft(2, '0');
+  final name =
+      'jnu-survey-${now.year}${two(now.month)}${two(now.day)}'
+      '-${two(now.hour)}${two(now.minute)}.json';
+  await SharePlus.instance.share(
+    ShareParams(
+      files: [
+        XFile.fromData(
+          utf8.encode(encodeRecords(r)),
+          mimeType: 'application/json',
+          name: name,
+        ),
+      ],
+      fileNameOverrides: [name],
+    ),
+  );
 }
