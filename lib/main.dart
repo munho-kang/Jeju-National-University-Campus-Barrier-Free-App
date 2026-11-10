@@ -9,6 +9,8 @@ import 'package:latlong2/latlong.dart';
 
 import 'graph.dart';
 import 'model.dart';
+import 'route.dart';
+import 'route_tab.dart';
 import 'store.dart';
 import 'survey_tab.dart';
 
@@ -83,6 +85,12 @@ class _HomePageState extends State<HomePage> {
   LatLng? _me;
   StreamSubscription<Position>? _positions;
 
+  // 지도 탭
+  Place? _dest; // 목적지
+  Place? _startPlace; // 직접 고른 출발지. null이면 내 위치에서 출발
+  Profile _profile = Profile.manual;
+  RouteResult? _route;
+
   // 조사 탭
   Kind _kind = Kind.stairs;
   LatLng? _first; // 시작점을 누르고 끝점을 기다리는 중이면 그 시작점
@@ -105,12 +113,16 @@ class _HomePageState extends State<HomePage> {
     super.dispose();
   }
 
-  void _rebuild() => _graph = buildGraph(
-    _campus.nodes,
-    _campus.edges,
-    _records,
-    _campus.elevationAt,
-  );
+  /// 조사 기록이 바뀌면 그물망을 다시 만들고, 보고 있던 경로도 다시 찾는다.
+  void _rebuild() {
+    _graph = buildGraph(
+      _campus.nodes,
+      _campus.edges,
+      _records,
+      _campus.elevationAt,
+    );
+    _findRoute(fit: false);
+  }
 
   Future<void> _startLocation() async {
     try {
@@ -123,7 +135,14 @@ class _HomePageState extends State<HomePage> {
         return;
       }
       _positions = Geolocator.getPositionStream().listen((p) {
-        if (mounted) setState(() => _me = LatLng(p.latitude, p.longitude));
+        if (!mounted) return;
+        setState(() {
+          final waiting = _dest != null && _startPoint == null;
+          _me = LatLng(p.latitude, p.longitude);
+          // 출발지를 기다리던 중에 위치를 처음 알게 되면 바로 길을 찾는다.
+          // 그 뒤로는 위치가 움직여도 다시 찾지 않는다 (설계서: 자동 재탐색 안 함).
+          if (waiting) _findRoute();
+        });
       }, onError: (_) {});
     } catch (_) {
       // 위치를 쓸 수 없어도 앱은 계속 쓸 수 있다 (출발지를 직접 고르면 된다).
@@ -149,7 +168,78 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _onMapTap(LatLng p) {
-    if (_tab == 1) _surveyTap(p);
+    if (_tab == 1) {
+      _surveyTap(p);
+    } else if (_dest == null) {
+      _tapPlace(p);
+    }
+  }
+
+  // ── 지도 탭 ──
+
+  /// 출발 점: 고른 장소, 없으면 내 위치(캠퍼스 안일 때만), 둘 다 없으면 null.
+  LatLng? get _startPoint {
+    final me = _me;
+    return _startPlace?.at ?? (me != null && _campus.contains(me) ? me : null);
+  }
+
+  void _findRoute({bool fit = true}) {
+    final dest = _dest, start = _startPoint;
+    final route = dest == null || start == null
+        ? null
+        : findRoute(_graph, start, dest.at, _profile);
+    _route = route;
+    if (!fit || route == null) return;
+    // 요약 창이 뜨면서 지도 크기가 바뀌므로, 다 그려진 뒤에 경로 전체가 보이게 맞춘다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _map.fitCamera(
+        CameraFit.coordinates(
+          coordinates: [start!, dest!.at, for (final l in route.legs) l.b],
+          padding: const EdgeInsets.all(48),
+          maxZoom: 18,
+        ),
+      );
+    });
+  }
+
+  /// 지도에서 건물을 눌러 목적지로 고른다 (목적지가 아직 없을 때만).
+  void _tapPlace(LatLng p) {
+    Place? best;
+    var bestMeters = placeTapMeters;
+    for (final place in _campus.places) {
+      final d = meters(p, place.at);
+      if (d <= bestMeters) (best, bestMeters) = (place, d);
+    }
+    if (best == null) return;
+    setState(() {
+      _dest = best;
+      _findRoute();
+    });
+  }
+
+  Future<void> _pickDest() async {
+    final place = await pickPlace(context, _campus.places, title: '어디로 갈까요?');
+    if (place == null || !mounted) return;
+    setState(() {
+      _dest = place;
+      _findRoute();
+    });
+  }
+
+  Future<void> _pickStart() async {
+    final me = _me;
+    final place = await pickPlace(
+      context,
+      _campus.places,
+      title: '어디에서 출발하나요?',
+      offerMyLocation: me != null && _campus.contains(me),
+    );
+    if (place == null || !mounted) return;
+    setState(() {
+      _startPlace = place == myLocation ? null : place;
+      _findRoute();
+    });
   }
 
   // ── 조사 탭 ──
@@ -233,11 +323,23 @@ class _HomePageState extends State<HomePage> {
       LatLng(_campus.north, _campus.east),
     );
     final me = _me, first = _first;
+    final dest = _dest, start = _startPoint, route = _route;
+    final showRoute = !survey && dest != null;
 
     return Scaffold(
       body: SafeArea(
         child: Column(
           children: [
+            if (!survey)
+              RouteHeader(
+                start: _startPlace?.name ?? (start == null ? null : '내 위치'),
+                dest: dest?.name,
+                onPickDest: _pickDest,
+                onPickStart: _pickStart,
+                onClear: () => setState(() {
+                  _dest = _startPlace = _route = null;
+                }),
+              ),
             if (survey)
               KindBar(
                 selected: _kind,
@@ -289,8 +391,39 @@ class _HomePageState extends State<HomePage> {
                               : records.where((r) => r.kind == Kind.stairs),
                         ),
                       ),
+                      if (showRoute && route != null)
+                        PolylineLayer(polylines: routeLines(route)),
                       MarkerLayer(
                         markers: [
+                          if (showRoute && route != null)
+                            ...routeMarkers(route),
+                          if (showRoute && start != null)
+                            Marker(
+                              point: start,
+                              width: 28,
+                              height: 28,
+                              child: const IgnorePointer(
+                                child: Icon(
+                                  Icons.trip_origin,
+                                  size: 28,
+                                  color: Color(0xFF2A7DE1),
+                                ),
+                              ),
+                            ),
+                          if (showRoute)
+                            Marker(
+                              point: dest.at,
+                              width: 40,
+                              height: 40,
+                              alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
+                              child: const IgnorePointer(
+                                child: Icon(
+                                  Icons.location_on,
+                                  size: 40,
+                                  color: Color(0xFFC0392B),
+                                ),
+                              ),
+                            ),
                           if (survey) ...recordMarkers(records, _delete),
                           if (survey && first != null)
                             Marker(
@@ -359,6 +492,17 @@ class _HomePageState extends State<HomePage> {
                 ],
               ),
             ),
+            if (showRoute)
+              RouteSheet(
+                route: route,
+                needStart: start == null,
+                profile: _profile,
+                onProfile: (p) => setState(() {
+                  _profile = p;
+                  _findRoute(fit: false);
+                }),
+                onPickStart: _pickStart,
+              ),
             if (survey)
               SurveyBar(
                 kind: _kind,
