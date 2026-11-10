@@ -35,6 +35,9 @@ class Graph {
   /// 길 위에 얹히지 못해 지도에만 표시되는 계단·급경사 기록.
   final Set<SurveyRecord> unapplied = {};
 
+  /// 모든 조사 기록의 양 끝점. 새로 누른 점이 가까우면 정확히 여기에 붙는다.
+  List<LatLng> _recordEnds = const [];
+
   Edge _piece(int a, int b, Kind kind) {
     final len = meters(nodes[a], nodes[b]);
     final grade = kind == Kind.elevator || len < 0.01
@@ -94,8 +97,9 @@ class Graph {
     );
   }
 
-  /// 조사 탭에서 누른 점을 가까운 길([snapMeters] 이내)에 붙인다.
-  LatLng snap(LatLng p, Kind kind) {
+  /// [p]를 가까운 길([snapMeters] 이내) 위의 점으로 옮긴다. 없으면 그대로.
+  /// 계단·급경사는 얹을 수 있는 길에만 붙는다.
+  LatLng _snapToPath(LatLng p, Kind kind) {
     final n = nearest(
       p,
       where: kind == Kind.stairs || kind == Kind.steep
@@ -103,6 +107,33 @@ class Graph {
           : null,
     );
     return n != null && n.meters <= snapMeters ? n.point : p;
+  }
+
+  /// 조사 탭에서 누른 점을 붙인다. 끝점을 누를 때는 [from]에 시작점을 준다.
+  LatLng snap(LatLng p, Kind kind, {LatLng? from}) {
+    // 1) 다른 기록의 끝점이 아주 가까우면 정확히 그 점에 붙는다. 그래야 계단
+    //    옆 경사로의 끝이 손가락 오차로 계단 구간 "안쪽"에 떨어지지 않는다.
+    LatLng? end;
+    var best = endpointSnapMeters;
+    for (final e in _recordEnds) {
+      final d = meters(p, e);
+      if (d <= best && (from == null || meters(from, e) >= 1)) {
+        (end, best) = (e, d);
+      }
+    }
+    if (end != null) return end;
+    // 2) 가까운 길에 붙는다.
+    final onPath = _snapToPath(p, kind);
+    // 길을 잇는 종류(새 길·경사로·엘리베이터)의 끝점이 시작점 쪽으로 되돌아가
+    // 붙으면 선이 접혀 버린다(예: 찻길에서 8m 떨어진 출입구로 가는 경사로).
+    // 그럴 때는 누른 자리를 그대로 쓴다.
+    final marksPath = kind == Kind.stairs || kind == Kind.steep;
+    if (from != null &&
+        !marksPath &&
+        meters(from, onPath) < meters(from, p) / 2) {
+      return p;
+    }
+    return onPath;
   }
 
   /// 조각 [edge]의 t 위치에 있는 점 번호. 끝에서 0.5m 안이면 끝 점, 아니면 쪼갠다.
@@ -150,9 +181,15 @@ class Graph {
   /// 양 끝점 가까이의 "모든" 길을 대상으로 한다. 같은 자리에 겹쳐 기록된 길을
   /// 하나만 막으면 나머지로 계단을 지나가게 되기 때문이다.
   void _overlay(SurveyRecord r) {
-    bool ok(Edge e) => overlayable(e.kind) && e.kind != r.kind;
+    // 이 기록이 이미 표시한 조각은 다시 찾지 않는다. (같은 종류로 이미 표시된
+    // 조각은 지나갈 수 있어야 한다. 겹쳐 기록한 두 계단이 하나로 이어지도록.)
+    final marked = <Edge>{};
+    bool ok(Edge e) => overlayable(e.kind) && !marked.contains(e);
     var applied = false;
-    final starts = _attachAll(r.a, ok), ends = _attachAll(r.b, ok);
+    // 기록할 때와 똑같이 가까운 길에 다시 붙여 본다. 계단을 먼저 기록하고 길을
+    // 나중에 기록해도(또는 길을 지웠다 다시 기록해도) 결과가 같아야 한다.
+    final starts = _attachAll(_snapToPath(r.a, r.kind), ok);
+    final ends = _attachAll(_snapToPath(r.b, r.kind), ok);
     for (final ia in starts) {
       for (final ib in ends) {
         if (ia == ib) continue;
@@ -169,6 +206,7 @@ class Graph {
           if (path == null) break;
           for (final i in path) {
             edges[i].kind = r.kind;
+            marked.add(edges[i]);
           }
           applied = true;
         }
@@ -189,7 +227,11 @@ Graph buildGraph(
   List<SurveyRecord> records,
   double Function(LatLng) elevationAt,
 ) {
-  final g = Graph(elevationAt)..nodes.addAll(nodes);
+  final g = Graph(elevationAt)
+    ..nodes.addAll(nodes)
+    .._recordEnds = [
+      for (final r in records) ...[r.a, r.b],
+    ];
   for (final (a, b) in edges) {
     g._addEdge(a, b, Kind.road);
   }

@@ -245,26 +245,42 @@ class _HomePageState extends State<HomePage> {
   // ── 조사 탭 ──
 
   Future<void> _surveyTap(LatLng tapped) async {
-    final p = _graph.snap(tapped, _kind);
     final first = _first;
+    final p = _graph.snap(tapped, _kind, from: first);
     if (first == null) return setState(() => _first = p);
     if (meters(first, p) < 1) return _say('두 점이 너무 가깝습니다. 다시 눌러 주세요');
     final r = SurveyRecord(_kind, first, p, DateTime.now().toUtc());
+    await _changeRecords(() => _local.add(r), created: r);
+  }
+
+  /// 기록을 더하거나 지우고, 저장하고, 조사자가 알아야 할 변화를 알린다.
+  ///
+  /// 계단·급경사 기록이 길 찾기에 반영되는지는 다른 기록(길)이 생기거나 사라질
+  /// 때도 바뀐다. 말없이 바뀌면 계단이 막히지 않은 채 남을 수 있어 매번 비교한다.
+  Future<void> _changeRecords(
+    void Function() change, {
+    SurveyRecord? created,
+  }) async {
+    final before = _graph.unapplied;
     setState(() {
-      _local.add(r);
+      change();
       _first = null;
       _rebuild();
     });
-    await _save();
-    if (r.kind == Kind.stairs || r.kind == Kind.steep) {
-      _say(
-        _graph.unapplied.contains(r)
-            ? "근처에 기록된 길이 없어 지도에만 표시합니다. 길이 있는 곳이면 먼저 '새 길'로 기록하세요"
-            : r.kind == Kind.stairs
-            ? '이 구간을 길 찾기에서 막았습니다'
-            : '이 구간을 가파른 길로 표시했습니다',
-      );
-    }
+    final saved = await _save();
+    final after = _graph.unapplied, now = _records.toSet();
+    final notice = surveyNotice(
+      saved: saved,
+      created: created,
+      createdApplied: !after.contains(created),
+      newlyApplied: before
+          .where((r) => now.contains(r) && !after.contains(r))
+          .length,
+      newlyUnapplied: after
+          .where((r) => r != created && !before.contains(r))
+          .length,
+    );
+    if (notice != null) _say(notice);
   }
 
   Future<void> _delete(SurveyRecord r) async {
@@ -289,18 +305,16 @@ class _HomePageState extends State<HomePage> {
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() {
-      _local.remove(r);
-      _rebuild();
-    });
-    await _save();
+    await _changeRecords(() => _local.remove(r));
   }
 
-  Future<void> _save() async {
+  /// 저장에 성공했는지 돌려준다.
+  Future<bool> _save() async {
     try {
       await saveRecords(_local);
+      return true;
     } catch (_) {
-      _say('저장하지 못했습니다. 내보내기로 사본을 남겨 주세요');
+      return false;
     }
   }
 
@@ -387,12 +401,13 @@ class _HomePageState extends State<HomePage> {
                         userAgentPackageName: 'kr.jnucapstone3.jnu_wheel_nav',
                         tileProvider: widget.tileProvider,
                       ),
+                      // 굵은 선: 길 찾기가 실제로 막거나(계단) 가파르다고 보는 구간.
+                      // 지도 탭에는 막힌 구간만, 조사 탭에는 기록한 선도 함께 보인다.
                       PolylineLayer(
-                        polylines: recordLines(
-                          survey
-                              ? records
-                              : records.where((r) => r.kind == Kind.stairs),
-                        ),
+                        polylines: [
+                          ...overlayLines(_graph, stairsOnly: !survey),
+                          if (survey) ...recordLines(records),
+                        ],
                       ),
                       if (showRoute && route != null)
                         PolylineLayer(polylines: routeLines(route)),
@@ -427,7 +442,12 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ),
                             ),
-                          if (survey) ...recordMarkers(records, _delete),
+                          if (survey)
+                            ...recordMarkers(
+                              records,
+                              _delete,
+                              unapplied: _graph.unapplied,
+                            ),
                           if (survey && first != null)
                             Marker(
                               point: first,
@@ -510,6 +530,7 @@ class _HomePageState extends State<HomePage> {
               SurveyBar(
                 kind: _kind,
                 count: records.length,
+                unapplied: _graph.unapplied.length,
                 waitingForEnd: first != null,
                 onExport: _export,
                 onCancel: () => setState(() => _first = null),

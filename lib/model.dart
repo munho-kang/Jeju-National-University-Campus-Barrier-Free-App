@@ -13,6 +13,7 @@ const elevatorSeconds = 60; // 엘리베이터 기다리는 시간
 const speedManualKmh = 3.0;
 const speedPoweredKmh = 4.0;
 const snapMeters = 15.0; // 누른 점이 길에 붙는 거리
+const endpointSnapMeters = 5.0; // 누른 점이 다른 기록의 끝점에 정확히 붙는 거리
 const overlayMeters = 3.0; // 계단·급경사 기록이 "길 위"라고 보는 거리
 const overlayDetour = 1.5; // 계단·급경사 구간이 직선 거리의 몇 배까지 굽어도 되는지
 const pieceMeters = 30.0; // 길을 나누는 조각의 최대 길이 (높이 자료 간격과 같다)

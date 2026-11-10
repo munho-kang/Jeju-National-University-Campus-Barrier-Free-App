@@ -76,6 +76,20 @@ void main() {
     expect(t.state(find.byType(FlutterMap)), same(map));
   });
 
+  testWidgets('길에 반영되지 않은 계단 기록은 다르게 보이고 개수가 표시된다', (t) async {
+    await open(t);
+    await t.tap(find.text('조사'));
+    await t.pumpAndSettle();
+    // 종류는 처음부터 '계단'. 길에서 먼 두 점을 누른다.
+    final c = t.getCenter(find.byType(FlutterMap));
+    await t.tapAt(c + const Offset(-60, 0));
+    await t.pumpAndSettle();
+    await t.tapAt(c + const Offset(60, 0));
+    await t.pumpAndSettle();
+    expect(find.byTooltip('계단 기록 (길에 반영되지 않음)'), findsOneWidget);
+    expect(find.textContaining('반영 안 됨 1건'), findsOneWidget);
+  });
+
   // Review Focus 4: 테스트에는 위치 기능이 없다 → 앱이 멈추지 않아야 한다
   testWidgets('위치를 모르면 출발지를 고르게 하고, 고르면 경로 요약이 나온다', (t) async {
     await open(t);

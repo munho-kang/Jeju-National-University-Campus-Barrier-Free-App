@@ -106,4 +106,70 @@ void main() {
     );
     expect(g.edges.every((e) => (e.grade - 0.10).abs() < 0.001), isTrue);
   });
+
+  // ── 최종 검토에서 찾은 문제의 재현 테스트 ──
+
+  test('계단을 먼저 기록하고 나중에 근처에 새 길을 기록해도 그 길이 막힌다', () {
+    final g = line([
+      rec(Kind.stairs, m(40, 50), m(60, 50)),
+      rec(Kind.newPath, m(0, 55), m(100, 55)), // 계단 기록에서 5m 떨어진 길
+    ]);
+    expect(
+      shortestPath(g, g.attach(m(0, 55)), g.attach(m(100, 55)), walk),
+      isNull,
+    );
+    expect(g.unapplied, isEmpty);
+  });
+
+  test('겹쳐 표시한 급경사는 합친 구간이 모두 가파른 길이 된다', () {
+    final g = line([
+      rec(Kind.steep, m(40, 0), m(60, 0)),
+      rec(Kind.steep, m(56, 0), m(80, 0)),
+    ]);
+    expect(between(g, 40, 80), isNotEmpty);
+    expect(between(g, 40, 80).every((e) => e.kind == Kind.steep), isTrue);
+    expect(g.unapplied, isEmpty);
+  });
+
+  test('겹쳐 표시한 계단은 합친 구간이 모두 막힌다', () {
+    final g = line([
+      rec(Kind.newPath, m(55, 0), m(55, 50)), // 계단 구간 한가운데로 들어오는 옆길
+      rec(Kind.stairs, m(40, 0), m(50, 0)),
+      rec(Kind.stairs, m(45, 0), m(65, 0)),
+    ]);
+    final side = g.attach(m(55, 50));
+    expect(shortestPath(g, side, g.attach(m(100, 0)), walk), isNull);
+    expect(shortestPath(g, side, g.attach(m(0, 0)), walk), isNull);
+  });
+
+  test('경사로 끝을 계단 끝 가까이 누르면 계단 끝점에 정확히 붙는다', () {
+    final stairs = rec(Kind.stairs, m(40, 0), m(60, 0));
+    final g = line([stairs]);
+    // 손가락 오차로 계단 구간 안쪽 2m를 눌러도
+    final a = g.snap(m(42, 3), Kind.ramp);
+    final b = g.snap(m(58, 3), Kind.ramp, from: a);
+    expect(a, stairs.a);
+    expect(b, stairs.b);
+    // 그 경사로로 계단을 돌아갈 수 있다
+    final g2 = line([stairs, rec(Kind.ramp, a, b)]);
+    expect(endToEnd(g2)!.map((i) => g2.edges[i].kind), contains(Kind.ramp));
+  });
+
+  test('길에서 벗어나는 짧은 경사로의 끝점은 길로 되돌아가 붙지 않는다', () {
+    final g = line([]);
+    final a = g.snap(m(50, 1), Kind.ramp);
+    expect(meters(a, m(50, 0)), lessThan(0.01)); // 시작점은 길에 붙는다
+    // 길에서 8m 떨어진 출입구: 붙이면 선이 접혀 버리므로 누른 자리 그대로
+    expect(g.snap(m(51, 8), Kind.ramp, from: a), m(51, 8));
+    // 멀리 떨어진 다른 지점의 길에는 붙는다
+    expect(
+      meters(g.snap(m(90, 8), Kind.ramp, from: a), m(90, 0)),
+      lessThan(0.01),
+    );
+    // 계단·급경사는 길 위 구간을 표시하는 종류라 항상 길에 붙는다
+    expect(
+      meters(g.snap(m(51, 8), Kind.stairs, from: a), m(51, 0)),
+      lessThan(0.01),
+    );
+  });
 }
