@@ -349,6 +349,9 @@ class _HomePageState extends State<HomePage> {
                 }),
               ),
             Expanded(
+              // 위아래 막대가 탭마다 달라져도 지도는 같은 것으로 알아보게 한다.
+              // 이 표식이 없으면 탭을 바꿀 때마다 지도가 처음 위치로 돌아간다.
+              key: const ValueKey('map'),
               child: Stack(
                 children: [
                   FlutterMap(

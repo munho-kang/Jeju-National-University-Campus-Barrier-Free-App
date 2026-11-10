@@ -65,6 +65,17 @@ void main() {
     expect(await loadRecords(), isEmpty);
   });
 
+  testWidgets('탭을 바꿔도 지도가 새로 만들어지지 않는다 (보던 위치가 유지된다)', (t) async {
+    await open(t);
+    final map = t.state(find.byType(FlutterMap));
+    await t.tap(find.text('조사'));
+    await t.pumpAndSettle();
+    expect(t.state(find.byType(FlutterMap)), same(map));
+    await t.tap(find.text('지도'));
+    await t.pumpAndSettle();
+    expect(t.state(find.byType(FlutterMap)), same(map));
+  });
+
   // Review Focus 4: 테스트에는 위치 기능이 없다 → 앱이 멈추지 않아야 한다
   testWidgets('위치를 모르면 출발지를 고르게 하고, 고르면 경로 요약이 나온다', (t) async {
     await open(t);
@@ -91,5 +102,36 @@ void main() {
     await t.pumpAndSettle();
     await pick(t, '정문');
     expect(find.text('휠체어로 갈 수 있는 길을 찾지 못했습니다'), findsOneWidget);
+  });
+
+  testWidgets('누르는 대상이 충분히 크고 이름이 붙어 있다', (t) async {
+    final handle = t.ensureSemantics();
+    Future<void> check() async {
+      // 48×48 이상인지, 화면 읽기 프로그램용 이름이 있는지
+      await expectLater(t, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(t, meetsGuideline(labeledTapTargetGuideline));
+    }
+
+    await open(t);
+    await check(); // 지도 탭: 검색 칸, 지도 버튼
+    await t.tap(find.textContaining('어디로 갈까요'));
+    await t.pumpAndSettle();
+    await check(); // 장소 고르기 창
+    await pick(t, '도서관');
+    await check(); // 출발지 고르기 안내
+    await t.tap(find.text('출발지 고르기'));
+    await t.pumpAndSettle();
+    await pick(t, '정문');
+    await check(); // 경로 요약, 수동/전동 전환
+    await t.tap(find.text('조사'));
+    await t.pumpAndSettle();
+    final c = t.getCenter(find.byType(FlutterMap));
+    await t.tapAt(c + const Offset(-60, 0));
+    await t.pumpAndSettle();
+    await check(); // 끝점 기다리는 중: 취소 버튼
+    await t.tapAt(c + const Offset(60, 0));
+    await t.pumpAndSettle();
+    await check(); // 기록 아이콘, 종류 칩, 내보내기
+    handle.dispose();
   });
 }

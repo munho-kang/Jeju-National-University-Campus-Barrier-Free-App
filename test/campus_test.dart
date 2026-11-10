@@ -54,4 +54,9 @@ void main() {
       inInclusiveRange(35, 75),
     );
   });
+
+  // 조사 결과를 assets/survey.json에 넣다가 형식을 깨뜨리면 앱이 켜지지 않는다.
+  test('내장 조사 기록을 읽을 수 있다', () {
+    decodeRecords(File('assets/survey.json').readAsStringSync());
+  });
 }
