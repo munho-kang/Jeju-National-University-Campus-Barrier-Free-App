@@ -1,5 +1,5 @@
 name: jnu_wheel_nav
-description: "A new Flutter project."
+description: "제주대학교 아라캠퍼스 휠체어 길 안내"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -61,6 +61,11 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  # 앱에 넣는 자료: 캠퍼스 길·장소·높이, 그리고 내장 조사 기록
+  assets:
+    - assets/campus.json
+    - assets/survey.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:
