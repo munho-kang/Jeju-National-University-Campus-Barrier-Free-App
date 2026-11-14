@@ -31,7 +31,7 @@ class NameLayer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final camera = MapCamera.of(context);
-    final screen = Offset.zero & camera.size;
+    final screen = Offset.zero & camera.nonRotatedSize;
     final centers = <Offset>[];
     final rects = <Rect>[];
     final shown = <Place>[];

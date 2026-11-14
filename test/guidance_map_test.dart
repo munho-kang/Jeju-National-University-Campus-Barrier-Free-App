@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jnu_wheel_nav/guidance_map.dart';
+import 'package:jnu_wheel_nav/model.dart';
 
 import 'helpers.dart';
 
@@ -54,5 +55,31 @@ void main() {
     expect(t.getTopRight(name).dx, greaterThan(t.getTopLeft(name).dx));
     expect(find.byType(TileLayer), findsNothing); // 인터넷 없이 보인다
     expect(find.textContaining('OpenStreetMap'), findsOneWidget);
+  });
+
+  testWidgets('세로 화면에서 돌아가 있어도 아래쪽(지나온 쪽) 건물 이름이 남는다', (t) async {
+    t.view.physicalSize = const Size(400, 800);
+    t.view.devicePixelRatio = 1;
+    addTearDown(t.view.reset);
+    final c = tinyCampus();
+    final (graph, route) = net(c.nodes, c.edges, m(0, 0), m(0, 300));
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GuidanceMap(
+            controller: MapController(),
+            campus: c,
+            graph: graph,
+            buildings: const [],
+            route: route,
+            dest: Place('뒤쪽', m(-100, 0)), // 동쪽으로 가는 중이라 화면 아래
+            position: m(0, 0),
+            heading: 90,
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+    expect(find.text('뒤쪽'), findsOneWidget);
   });
 }
