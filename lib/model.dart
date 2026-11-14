@@ -36,6 +36,9 @@ const progressWindowMeters = 50.0; // (추가) 진행 위치는 직전 진행 �
 const elevatorTrustMeters = 60.0; // (추가) 엘리베이터 위에서는 이 거리까지 떨어져도 건물 안으로 본다
 const headingSpanMeters = 15.0; // (추가) 지도 방향을 재는 구간 길이(진행 위치 앞뒤로 절반씩)
 
+/// 위치 한 번과 그 오차(m).
+typedef Fix = ({LatLng at, double accuracy});
+
 enum Kind {
   road('길'),
   stairs('계단'),
