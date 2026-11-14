@@ -108,6 +108,26 @@ List<SurveyRecord> decodeRecords(String json) {
   }
 }
 
+/// 건물마다 테두리 하나: 숫자를 [위도, 경도, 위도, 경도, …]로 늘어놓은 목록.
+/// 형식이 틀리면 어떤 경우든 [FormatException]을 던진다.
+List<List<LatLng>> decodeBuildings(String json) {
+  try {
+    return [
+      for (final ring in jsonDecode(json) as List)
+        () {
+          final n = (ring as List).cast<num>();
+          if (n.length.isOdd || n.length < 6) throw '점이 3개보다 적거나 짝이 안 맞음';
+          return [
+            for (var i = 0; i < n.length; i += 2)
+              LatLng(n[i].toDouble(), n[i + 1].toDouble()),
+          ];
+        }(),
+    ];
+  } catch (e) {
+    throw FormatException('건물 테두리 형식이 아닙니다: $e');
+  }
+}
+
 // 캠퍼스가 작아서(약 2km) 지구를 평평하다고 보고 계산한다. 오차는 몇 cm 수준.
 const _lat0 = 33.4555, _lng0 = 126.5625;
 final _metersPerLng = 111320 * cos(_lat0 * pi / 180);

@@ -59,4 +59,22 @@ void main() {
   test('내장 조사 기록을 읽을 수 있다', () {
     decodeRecords(File('assets/survey.json').readAsStringSync());
   });
+
+  test('20 내장 건물 테두리가 올바른 형식이다', () {
+    final c = Campus.fromJson(
+      jsonDecode(File('assets/campus.json').readAsStringSync()),
+    );
+    final b = decodeBuildings(File('assets/buildings.json').readAsStringSync());
+    expect(b.length, greaterThan(50)); // 이름 있는 건물만 58곳이다
+    expect(b.every((ring) => ring.length >= 3), isTrue);
+    expect(b.every((ring) => ring.any(c.contains)), isTrue); // 캠퍼스 상자에 걸친 건물만
+  });
+  test('건물 테두리 형식이 틀리면 FormatException', () {
+    expect(() => decodeBuildings('[[33.1,126.1,33.2]]'), throwsFormatException);
+    expect(
+      () => decodeBuildings('[[33.1,126.1,33.2,126.2]]'),
+      throwsFormatException,
+    );
+    expect(() => decodeBuildings('{}'), throwsFormatException);
+  });
 }
