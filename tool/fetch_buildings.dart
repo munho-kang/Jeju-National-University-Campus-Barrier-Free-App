@@ -54,6 +54,13 @@ Future<void> main() async {
     }
   }
 
+  // 서버가 빈 결과나 일부만 주면 기존 파일을 덮어쓰지 않는다(지금 자료는 59개).
+  if (rings.length < 50) {
+    throw Exception(
+      '건물이 ${rings.length}개만 왔습니다(50개 미만). '
+      'assets/buildings.json은 그대로 두었습니다. 잠시 뒤 다시 실행하세요.',
+    );
+  }
   File('assets/buildings.json').writeAsStringSync(jsonEncode(rings));
   stdout.writeln('건물 ${rings.length}개 → assets/buildings.json');
 }

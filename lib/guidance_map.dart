@@ -45,6 +45,7 @@ class NameLayer extends StatelessWidget {
       shown.add(p);
       centers.add(c);
       rects.add(Rect.fromCenter(center: c, width: tp.width, height: tp.height));
+      tp.dispose();
     }
     return IgnorePointer(
       child: Stack(

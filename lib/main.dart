@@ -24,9 +24,13 @@ Future<void> main() async {
   final bundled = decodeRecords(
     await rootBundle.loadString('assets/survey.json'),
   );
-  final buildings = decodeBuildings(
-    await rootBundle.loadString('assets/buildings.json'),
-  );
+  // 건물 테두리는 꾸밈이라 자료가 잘못돼도 앱은 열리게 한다(테두리 없이).
+  var buildings = const <List<LatLng>>[];
+  try {
+    buildings = decodeBuildings(
+      await rootBundle.loadString('assets/buildings.json'),
+    );
+  } catch (_) {}
   runApp(
     App(
       campus: campus,
