@@ -69,7 +69,9 @@ List<Cue> cuesFor(RouteResult r) {
     }
     // 가장 크게 꺾이는 점을 모퉁이의 자리로 삼는다.
     final peak = corner.reduce((a, b) => turn[b].abs() > turn[a].abs() ? b : a);
-    cues.add(Cue(kind, starts[peak]));
+    // 4m 안의 꺾임은 길 위에 붙인 시작점이 만든 짧은 조각 탓이라 말하지 않는다.
+    // 현장 조정 값이 아니라서 model.dart에 두지 않는다.
+    if (starts[peak] >= 4) cues.add(Cue(kind, starts[peak]));
   }
   for (var i = 0; i < n; i++) {
     final l = legs[i], prev = i == 0 ? null : legs[i - 1];

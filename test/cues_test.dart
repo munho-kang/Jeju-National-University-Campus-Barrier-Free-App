@@ -99,4 +99,11 @@ test('내장 자료: 정문 → 중앙도서관의 안내 목록이 경로와 �
     expect([for (final x in c) x.at], [for (final x in c) x.at]..sort());
   }
 });
+test('경로 맨 앞의 1m 조각 끝에서 꺾이는 것은 말하지 않고, 더 가서 꺾이는 것은 말한다', () {
+  // 다시 찾은 길은 길 위에 붙인 점에서 시작해서 맨 앞 조각이 아주 짧을 수 있다.
+  // 동쪽 1m → 왼쪽으로 꺾어 북쪽 100m → 오른쪽으로 꺾어 동쪽 100m
+  final c = cuesFor(walk([m(0, 0), m(1, 0), m(1, 100), m(101, 100)]));
+  expect([for (final x in c) x.kind], [CueKind.right, CueKind.arrive]);
+  expect(c[0].at, closeTo(101, 0.5));
+});
 }
