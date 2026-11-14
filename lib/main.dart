@@ -8,11 +8,13 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'graph.dart';
+import 'guidance_screen.dart';
 import 'model.dart';
 import 'route.dart';
 import 'route_tab.dart';
 import 'store.dart';
 import 'survey_tab.dart';
+import 'voice.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +24,17 @@ Future<void> main() async {
   final bundled = decodeRecords(
     await rootBundle.loadString('assets/survey.json'),
   );
-  runApp(App(campus: campus, bundled: bundled, local: await loadRecords()));
+  final buildings = decodeBuildings(
+    await rootBundle.loadString('assets/buildings.json'),
+  );
+  runApp(
+    App(
+      campus: campus,
+      bundled: bundled,
+      local: await loadRecords(),
+      buildings: buildings,
+    ),
+  );
 }
 
 class App extends StatelessWidget {
@@ -32,6 +44,9 @@ class App extends StatelessWidget {
     required this.bundled,
     required this.local,
     this.tileProvider,
+    this.buildings = const [],
+    this.voice,
+    this.fixes,
   });
 
   final Campus campus;
@@ -41,6 +56,15 @@ class App extends StatelessWidget {
 
   /// 테스트에서 인터넷 없이 지도를 띄우려고 바꿔 끼우는 자리. 평소엔 비워 둔다.
   final TileProvider? tileProvider;
+
+  /// 안내 화면에 그리는 건물 윤곽(assets/buildings.json).
+  final List<List<LatLng>> buildings;
+
+  /// 안내 음성. 비우면 `Voice()`.
+  final Voice? voice;
+
+  /// 테스트에서 위치를 흉내 내려고 바꿔 끼우는 자리. 평소엔 비워 둔다.
+  final Stream<Fix>? fixes;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
@@ -52,6 +76,9 @@ class App extends StatelessWidget {
       bundled: bundled,
       local: local,
       tileProvider: tileProvider,
+      buildings: buildings,
+      voice: voice,
+      fixes: fixes,
     ),
   );
 }
@@ -64,11 +91,17 @@ class HomePage extends StatefulWidget {
     required this.bundled,
     required this.local,
     this.tileProvider,
+    this.buildings = const [],
+    this.voice,
+    this.fixes,
   });
 
   final Campus campus;
   final List<SurveyRecord> bundled, local;
   final TileProvider? tileProvider;
+  final List<List<LatLng>> buildings;
+  final Voice? voice;
+  final Stream<Fix>? fixes;
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -83,7 +116,11 @@ class _HomePageState extends State<HomePage> {
   int _tab = 0; // 0 지도, 1 조사
 
   LatLng? _me;
-  StreamSubscription<Position>? _positions;
+  StreamSubscription<Fix>? _positions;
+
+  /// 들어온 위치를 안내 화면에 그대로 넘겨 주는 통로.
+  final _fixes = StreamController<Fix>.broadcast();
+  late final Voice _voice = widget.voice ?? Voice();
 
   // 지도 탭
   Place? _dest; // 목적지
@@ -110,6 +147,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _positions?.cancel();
+    _fixes.close();
     super.dispose();
   }
 
@@ -126,23 +164,30 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _startLocation() async {
     try {
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
+      var fixes = widget.fixes;
+      if (fixes == null) {
+        var permission = await Geolocator.checkPermission();
+        if (permission == LocationPermission.denied) {
+          permission = await Geolocator.requestPermission();
+        }
+        if (permission == LocationPermission.denied ||
+            permission == LocationPermission.deniedForever) {
+          return;
+        }
+        fixes = Geolocator.getPositionStream().map(
+          (p) => (at: LatLng(p.latitude, p.longitude), accuracy: p.accuracy),
+        );
       }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return;
-      }
-      _positions = Geolocator.getPositionStream().listen((p) {
+      _positions = fixes.listen((f) {
         if (!mounted) return;
         setState(() {
           final waiting = _dest != null && _startPoint == null;
-          _me = LatLng(p.latitude, p.longitude);
+          _me = f.at;
           // 출발지를 기다리던 중에 위치를 처음 알게 되면 바로 길을 찾는다.
           // 그 뒤로는 위치가 움직여도 다시 찾지 않는다 (설계서: 자동 재탐색 안 함).
           if (waiting) _findRoute();
         });
+        _fixes.add(f);
       }, onError: (_) {});
     } catch (_) {
       // 위치를 쓸 수 없어도 앱은 계속 쓸 수 있다 (출발지를 직접 고르면 된다).
@@ -201,6 +246,31 @@ class _HomePageState extends State<HomePage> {
         ),
       );
     });
+  }
+
+  /// 안내 화면을 띄운다. [preview]가 아니면 지금 위치에서 길을 다시 찾고 시작한다.
+  Future<void> _guide({required bool preview}) async {
+    if (!preview) setState(() => _findRoute(fit: false));
+    final route = _route, dest = _dest;
+    if (route == null || route.legs.isEmpty || dest == null) return;
+    final arrived = await Navigator.push(
+      context,
+      MaterialPageRoute<bool>(
+        // 따로 둔 알림 통로: 닫히는 동안 아래 도착 알림이 이 화면에도 겹쳐 뜨지 않게.
+        builder: (_) => ScaffoldMessenger(
+          child: GuidanceScreen(
+            campus: _campus,
+            graph: _graph,
+            buildings: widget.buildings,
+            route: route,
+            dest: dest,
+            voice: _voice,
+            fixes: preview ? null : _fixes.stream,
+          ),
+        ),
+      ),
+    );
+    if (arrived == true) _say('${dest.name}에 도착했습니다');
   }
 
   /// 지도에서 건물을 눌러 목적지로 고른다 (목적지가 아직 없을 때만).
@@ -525,6 +595,10 @@ class _HomePageState extends State<HomePage> {
                   _findRoute(fit: false);
                 }),
                 onPickStart: _pickStart,
+                onPreview: () => _guide(preview: true),
+                onGuide: _startPlace == null
+                    ? () => _guide(preview: false)
+                    : null,
               ),
             if (survey)
               SurveyBar(

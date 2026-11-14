@@ -229,6 +229,8 @@ class RouteSheet extends StatelessWidget {
     required this.profile,
     required this.onProfile,
     required this.onPickStart,
+    this.onGuide,
+    this.onPreview,
   });
 
   /// 찾은 길. 갈 수 있는 길이 없으면 null.
@@ -239,6 +241,9 @@ class RouteSheet extends StatelessWidget {
   final Profile profile;
   final ValueChanged<Profile> onProfile;
   final VoidCallback onPickStart;
+
+  /// 길이 있을 때 보이는 "안내 시작"·"미리 보기" 버튼. null이면 그 버튼을 숨긴다.
+  final VoidCallback? onGuide, onPreview;
 
   @override
   Widget build(BuildContext context) {
@@ -315,6 +320,29 @@ class RouteSheet extends StatelessWidget {
                   selected: {profile},
                   onSelectionChanged: (s) => onProfile(s.first),
                 ),
+                if (route.legs.isNotEmpty &&
+                    (onGuide != null || onPreview != null)) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    spacing: 8,
+                    children: [
+                      if (onGuide != null)
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: onGuide,
+                            child: const Text('안내 시작'),
+                          ),
+                        ),
+                      if (onPreview != null)
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: onPreview,
+                            child: const Text('미리 보기'),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
       ),
     );
