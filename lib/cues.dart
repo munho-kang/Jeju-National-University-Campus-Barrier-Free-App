@@ -91,9 +91,11 @@ List<Cue> cuesFor(RouteResult r) {
   }
   // 거리 순서로. 같은 자리면 넣은 순서(꺾임 → 엘리베이터·경사로·가파른 구간)를 지킨다.
   final order = [for (var i = 0; i < cues.length; i++) i]
-    ..sort((a, b) => cues[a].at != cues[b].at
-        ? cues[a].at.compareTo(cues[b].at)
-        : a.compareTo(b));
+    ..sort(
+      (a, b) => cues[a].at != cues[b].at
+          ? cues[a].at.compareTo(cues[b].at)
+          : a.compareTo(b),
+    );
   return [for (final i in order) cues[i], Cue(CueKind.arrive, starts.last)];
 }
 
