@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jnu_wheel_nav/cues.dart';
 import 'package:jnu_wheel_nav/guidance.dart';
@@ -294,5 +296,17 @@ void main() {
     g = guide([m(0, 0), m(12, 0), m(12, 100)], [(0, 1), (1, 2)], m(12, 100));
     expect(g.start().last, '10미터 앞에서 왼쪽입니다');
     expect(at(5, 0), isEmpty); // 다시 말하지 않는다
+  });
+  test('길 밖 한 자리에서 위치가 몇 m씩 흔들려도 다시 찾았다는 말은 한 번만 한다', () {
+    g = parallel(1);
+    final r = Random(1);
+    at(40, 0);
+    at(80, 0);
+    // 나란한 길에서 40m 떨어진 건물 앞에 3분 동안 서 있다. 위치는 앞뒤 좌우 6m씩 흔들린다.
+    final said = [
+      for (var i = 0; i < 180; i++)
+        ...at(80 + r.nextDouble() * 12 - 6, 85 + r.nextDouble() * 12 - 6),
+    ];
+    expect(said.where((s) => s == '경로를 다시 찾았습니다'), hasLength(1));
   });
 }

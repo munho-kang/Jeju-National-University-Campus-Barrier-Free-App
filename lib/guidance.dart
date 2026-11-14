@@ -95,6 +95,7 @@ class Guidance {
   int _said = 0; // cues[_said]부터 아직 말하지 않았다
   int _offCount = 0; // 연속으로 길 밖이었던 횟수
   DateTime? _lastReroute;
+  LatLng? _rerouteFrom; // 마지막으로 다시 찾은 자리. 거의 같은 자리에서는 다시 찾지 않는다
   bool _lostSaid = false; // 못 찾음 알림을 이미 했다
 
   RouteResult get route => track.route;
@@ -160,6 +161,7 @@ class Guidance {
       _offCount = 0;
       offRoute = false;
       _lostSaid = false;
+      _rerouteFrom = null;
     } else {
       final onLift = route.legs[track.legAt(along)].kind == Kind.elevator;
       if (accuracy > distrustMeters ||
@@ -174,12 +176,14 @@ class Guidance {
       arrived = true;
       return [arrivedSpeech];
     }
-    final last = _lastReroute;
+    final last = _lastReroute, from = _rerouteFrom;
     if (_offCount < offRouteCount ||
-        (last != null && now.difference(last).inSeconds < rerouteSeconds)) {
+        (last != null && now.difference(last).inSeconds < rerouteSeconds) ||
+        (from != null && apart(p, from) < offRouteMeters)) {
       return _announce();
     }
     _lastReroute = now;
+    _rerouteFrom = p;
     final found = findRoute(graph, p, destination, route.profile);
     if (found == null) {
       if (_lostSaid) return _announce();
