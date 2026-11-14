@@ -58,7 +58,7 @@ void main() {
   });
 
   testWidgets('세로 화면에서 돌아가 있어도 아래쪽(지나온 쪽) 건물 이름이 남는다', (t) async {
-    t.view.physicalSize = const Size(400, 800);
+    t.view.physicalSize = const Size(800, 1400);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
     final c = tinyCampus();
