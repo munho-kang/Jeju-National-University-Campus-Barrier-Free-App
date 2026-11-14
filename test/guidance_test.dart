@@ -237,4 +237,62 @@ void main() {
     expect([at(140, 110), at(140, 110)], everyElement(isEmpty)); // 목적지 옆 빈터
     expect(at(140, 110), [arrivedSpeech]);
   });
+
+  /// 동쪽 300m 길 (0,0)–(300,0)과, 그 북쪽([side]가 1) 또는 남쪽(−1) 45m에 나란한 길.
+  /// 두 길은 동쪽 끝에서만 이어진다.
+  Guidance parallel(double side, {List<SurveyRecord> records = const []}) =>
+      guide(
+        [m(0, 0), m(300, 0), m(0, 45 * side), m(300, 45 * side)],
+        [(0, 1), (2, 3), (1, 3)],
+        m(300, 0),
+        records: records,
+      );
+
+  test('다시 찾은 뒤의 방향은 왼쪽과 오른쪽을 바르게 말한다', () {
+    g = parallel(1);
+    at(40, 0);
+    at(80, 0);
+    at(80, 40);
+    at(80, 40); // 북쪽으로 벗어났다. 북쪽을 보고 있으니 동쪽으로 가는 새 길은 오른쪽
+    expect(at(80, 40), ['경로를 다시 찾았습니다', '오른쪽으로 가세요']);
+    g = parallel(-1);
+    at(40, 0);
+    at(80, 0);
+    at(80, -40);
+    at(80, -40); // 남쪽으로 벗어났다. 남쪽을 보고 있으니 동쪽은 왼쪽
+    expect(at(80, -40), ['경로를 다시 찾았습니다', '왼쪽으로 가세요']);
+  });
+  test('경로 맨 앞이 가파르면 시작할 때 바로 알린다', () {
+    g = guide(
+      [m(0, 0), m(200, 0)],
+      [(0, 1)],
+      m(200, 0),
+      records: [rec(Kind.steep, m(0, 0), m(30, 0))],
+    );
+    expect(g.start().sublist(2), [
+      '가파른 구간이 1곳 있습니다',
+      startsWith('바로 앞부터 가파른 구간입니다'),
+    ]);
+    expect(g.metersToSteep, 0);
+    expect(at(5, 0), isEmpty);
+  });
+  test('다시 찾은 길이 가파른 구간 안에서 시작하면 바로 알린다', () {
+    g = parallel(1, records: [rec(Kind.steep, m(70, 45), m(120, 45))]);
+    at(40, 0);
+    at(80, 0);
+    at(80, 40);
+    at(80, 40);
+    expect(at(80, 40), [
+      '경로를 다시 찾았습니다',
+      '오른쪽으로 가세요',
+      '가파른 구간이 1곳 있습니다',
+      startsWith('바로 앞부터 가파른 구간입니다'),
+    ]);
+    expect(g.metersToSteep, 0);
+  });
+  test('시작할 때 이미 미리 알리는 거리 안에 있는 안내는 시작 문장에 붙는다', () {
+    g = guide([m(0, 0), m(12, 0), m(12, 100)], [(0, 1), (1, 2)], m(12, 100));
+    expect(g.start().last, '10미터 앞에서 왼쪽입니다');
+    expect(at(5, 0), isEmpty); // 다시 말하지 않는다
+  });
 }
