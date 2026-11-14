@@ -93,6 +93,9 @@ class Guidance {
   bool arrived = false;
   bool offRoute = false;
   int _said = 0; // cues[_said]부터 아직 말하지 않았다
+  int _offCount = 0; // 연속으로 길 밖이었던 횟수
+  DateTime? _lastReroute;
+  bool _lostSaid = false; // 못 찾음 알림을 이미 했다
 
   RouteResult get route => track.route;
 
@@ -154,12 +157,71 @@ class Guidance {
     if (n.meters <= offRouteMeters) {
       along = n.s;
       position = n.point;
+      _offCount = 0;
+      offRoute = false;
+      _lostSaid = false;
+    } else {
+      final onLift = route.legs[track.legAt(along)].kind == Kind.elevator;
+      if (accuracy > distrustMeters ||
+          (onLift && n.meters <= elevatorTrustMeters)) {
+        return _announce();
+      }
+      position = p;
+      offRoute = true;
+      _offCount++;
     }
     if (remainingMeters <= arriveMeters) {
       arrived = true;
       return [arrivedSpeech];
     }
-    return _announce();
+    final last = _lastReroute;
+    if (_offCount < offRouteCount ||
+        (last != null && now.difference(last).inSeconds < rerouteSeconds)) {
+      return _announce();
+    }
+    _lastReroute = now;
+    final found = findRoute(graph, p, destination, route.profile);
+    if (found == null) {
+      if (_lostSaid) return _announce();
+      _lostSaid = true;
+      return ['길에서 벗어났습니다. 표시된 길로 돌아가 주세요', ..._announce()];
+    }
+    if (found.legs.isEmpty) {
+      arrived = true;
+      return [arrivedSpeech];
+    }
+    final start = track.nearest(found.legs.first.a);
+    final same =
+        found.legs.every(
+          (l) =>
+              track.nearest(l.a).meters <= 1 && track.nearest(l.b).meters <= 1,
+        ) &&
+        (found.meters - (track.meters - start.s)).abs() <= 2;
+    if (same) {
+      along = start.s;
+      _offCount = 0;
+      offRoute = false;
+      return _announce();
+    }
+    final going = bearing(track.pointAt(along), p);
+    final fresh = Track(found);
+    final turn = turnKind(leftTurn(going, fresh.heading(0)));
+    track = fresh;
+    cues = cuesFor(found);
+    along = 0;
+    _said = 0;
+    _offCount = 0;
+    offRoute = false;
+    position = found.legs.first.a;
+    return [
+      '경로를 다시 찾았습니다',
+      if (turn == CueKind.uturn) '뒤로 돌아서 가세요',
+      if (turn == CueKind.left) '왼쪽으로 가세요',
+      if (turn == CueKind.right) '오른쪽으로 가세요',
+      if (found.steepSections.isNotEmpty)
+        '가파른 구간이 ${found.steepSections.length}곳 있습니다',
+      ..._announce(),
+    ];
   }
 
   /// 아직 말하지 않은 안내 중 알릴 때가 된 것의 문장. 한 번 꺼낸 것은 다시 꺼내지 않는다.
