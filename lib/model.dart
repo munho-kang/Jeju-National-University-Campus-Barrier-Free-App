@@ -20,6 +20,22 @@ const pieceMeters = 30.0; // 길을 나누는 조각의 최대 길이 (높이 �
 const smoothPasses = 1; // 높이 자료를 다듬는 횟수
 const placeTapMeters = 60.0; // 지도에서 건물을 눌렀다고 보는 거리
 
+// ── 이동 중 길 안내 (2026-11-14 설계서 5.6절). 현장과 맞지 않으면 여기만 고친다. ──
+const announceMeters = 20.0; // 미리 알리는 거리
+const turnDegrees = 45.0; // 꺾임으로 보는 각도
+const uturnDegrees = 150.0; // 뒤로 돌기로 보는 각도
+const cornerMeters = 15.0; // 모퉁이로 묶는 거리
+const offRouteMeters = 25.0; // 벗어남 거리
+const offRouteCount = 3; // 벗어남 횟수(연속)
+const distrustMeters = 30.0; // 믿지 않는 오차(초과)
+const rerouteSeconds = 10; // 다시 찾기 간격
+const arriveMeters = 15.0; // 도착 거리
+const guidanceZoom = 18.0; // 안내 화면 확대
+const previewSpeed = 5.0; // 미리 보기 빠르기(초속 m)
+const progressWindowMeters = 50.0; // (추가) 진행 위치는 직전 진행 위치의 앞뒤 이 거리 안에서만 찾는다
+const elevatorTrustMeters = 60.0; // (추가) 엘리베이터 위에서는 이 거리까지 떨어져도 건물 안으로 본다
+const headingSpanMeters = 15.0; // (추가) 지도 방향을 재는 구간 길이(진행 위치 앞뒤로 절반씩)
+
 enum Kind {
   road('길'),
   stairs('계단'),

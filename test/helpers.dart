@@ -3,7 +3,9 @@ import 'dart:math';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:jnu_wheel_nav/graph.dart';
 import 'package:jnu_wheel_nav/model.dart';
+import 'package:jnu_wheel_nav/route.dart';
 import 'package:latlong2/latlong.dart';
 
 /// 원점(33.4555, 126.5625)에서 동쪽 x m, 북쪽 y m인 점. `xy`의 반대.
@@ -16,6 +18,36 @@ SurveyRecord rec(Kind k, LatLng a, LatLng b) =>
     SurveyRecord(k, a, b, DateTime.utc(2026, 11, 12));
 
 double flat(LatLng _) => 0;
+
+/// 점들과 이음선으로 길을 만들고 from → to 경로를 찾는다.
+(Graph, RouteResult) net(
+  List<LatLng> nodes,
+  List<(int, int)> edges,
+  LatLng from,
+  LatLng to, {
+  List<SurveyRecord> records = const [],
+  double Function(LatLng) h = flat,
+  Profile p = Profile.manual,
+}) {
+  final g = buildGraph(nodes, edges, records, h);
+  return (g, findRoute(g, from, to, p)!);
+}
+
+/// 점들을 차례로 이은 길을 처음부터 끝까지 가는 경로.
+RouteResult walk(
+  List<LatLng> pts, {
+  List<SurveyRecord> records = const [],
+  double Function(LatLng) h = flat,
+  Profile p = Profile.manual,
+}) => net(
+  pts,
+  [for (var i = 0; i + 1 < pts.length; i++) (i, i + 1)],
+  pts.first,
+  pts.last,
+  records: records,
+  h: h,
+  p: p,
+).$2;
 
 /// 인터넷 없이 테스트하려고 지도 그림 대신 투명한 1×1 그림만 주는 공급자.
 class BlankTiles extends TileProvider {
