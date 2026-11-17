@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
@@ -8,11 +10,144 @@ import 'route.dart';
 import 'route_tab.dart';
 import 'survey_tab.dart';
 
+const mapBackground = Color(0xFFF3F4F6);
+
 const _labelStyle = TextStyle(
-  fontSize: 13,
-  fontWeight: FontWeight.w600,
-  color: Color(0xFF333333),
+  fontSize: 12,
+  fontWeight: FontWeight.w700,
+  color: Color(0xFF4A4F57),
+  shadows: [
+    Shadow(offset: Offset(1, 1), color: Colors.white),
+    Shadow(offset: Offset(-1, 1), color: Colors.white),
+    Shadow(offset: Offset(1, -1), color: Colors.white),
+    Shadow(offset: Offset(-1, -1), color: Colors.white),
+    Shadow(blurRadius: 2, color: Colors.white),
+  ],
 );
+
+LatLng _shifted(LatLng p) => LatLng(
+  p.latitude - 1.5 / 110574,
+  p.longitude + 1.5 / (111320 * cos(p.latitude * pi / 180)),
+);
+
+/// 안내 화면과 지도 탭이 함께 쓰는 층: [건물 그림자, 건물, 길].
+List<Widget> campusLayers(Graph graph, List<List<LatLng>> buildings) => [
+  PolygonLayer(
+    polygons: [
+      for (final b in buildings)
+        Polygon(
+          points: [for (final p in b) _shifted(p)],
+          color: const Color(0xFFC3C8D0),
+        ),
+    ],
+  ),
+  PolygonLayer(
+    polygons: [
+      for (final b in buildings)
+        Polygon(
+          points: b,
+          color: const Color(0xFFD9DDE4),
+          borderColor: const Color(0xFFB8BEC8),
+          borderStrokeWidth: 1,
+        ),
+    ],
+  ),
+  PolylineLayer(
+    polylines: [
+      for (final e in graph.edges)
+        if (e.kind != Kind.stairs)
+          Polyline(
+            points: [graph.nodes[e.a], graph.nodes[e.b]],
+            strokeWidth: 5,
+            color: Colors.white,
+            borderStrokeWidth: 3,
+            borderColor: const Color(0xFFE1E4E8),
+          ),
+    ],
+  ),
+];
+
+const _blue = Color(0xFF2A7DE1);
+
+class StartDot extends StatelessWidget {
+  const StartDot({super.key});
+
+  @override
+  Widget build(BuildContext context) => const DecoratedBox(
+    decoration: BoxDecoration(
+      color: Colors.white,
+      shape: BoxShape.circle,
+      border: Border.fromBorderSide(BorderSide(color: _blue, width: 4)),
+    ),
+  );
+}
+
+class MeDot extends StatelessWidget {
+  const MeDot({super.key});
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Semantics(
+      label: '내 위치',
+      child: Center(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _blue.withValues(alpha: 0.18),
+            shape: BoxShape.circle,
+          ),
+          child: const SizedBox.square(
+            dimension: 44,
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _blue,
+                  shape: BoxShape.circle,
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Colors.white, width: 3),
+                  ),
+                ),
+                child: SizedBox.square(dimension: 18),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+class DestPin extends StatelessWidget {
+  const DestPin(this.name, {super.key});
+  final String name;
+
+  @override
+  Widget build(BuildContext context) => IgnorePointer(
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          constraints: const BoxConstraints(maxWidth: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: const Color(0xFFC0392B),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const Icon(Icons.location_on, size: 36, color: Color(0xFFC0392B)),
+      ],
+    ),
+  );
+}
 
 /// 앞에서부터 보며, 이미 남긴 것과 겹치지 않는 것의 번호만 남긴다.
 List<int> keepLabels(List<Rect> rects) {
@@ -98,35 +233,14 @@ class GuidanceMap extends StatelessWidget {
         initialRotation: -heading,
         minZoom: 15,
         maxZoom: 20,
-        backgroundColor: const Color(0xFFF4F1EA),
+        backgroundColor: mapBackground,
         interactionOptions: const InteractionOptions(
           flags: InteractiveFlag.pinchZoom | InteractiveFlag.scrollWheelZoom,
         ),
         onTap: (_, p) => onTap?.call(p),
       ),
       children: [
-        PolygonLayer(
-          polygons: [
-            for (final b in buildings)
-              Polygon(
-                points: b,
-                color: const Color(0xFFE2DDD0),
-                borderColor: const Color(0xFF9A9384),
-                borderStrokeWidth: 1.5,
-              ),
-          ],
-        ),
-        PolylineLayer(
-          polylines: [
-            for (final e in graph.edges)
-              if (e.kind != Kind.stairs)
-                Polyline(
-                  points: [graph.nodes[e.a], graph.nodes[e.b]],
-                  strokeWidth: 4,
-                  color: const Color(0xFFBDB8AC),
-                ),
-          ],
-        ),
+        ...campusLayers(graph, buildings),
         PolylineLayer(polylines: overlayLines(graph, stairsOnly: true)),
         PolylineLayer(polylines: routeLines(route)),
         MarkerLayer(
@@ -135,39 +249,21 @@ class GuidanceMap extends StatelessWidget {
             ...routeMarkers(route),
             Marker(
               point: dest.at,
-              width: 40,
-              height: 40,
+              width: 160,
+              height: 80,
               alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
-              child: const IgnorePointer(
-                child: Icon(
-                  Icons.location_on,
-                  size: 40,
-                  color: Color(0xFFC0392B),
-                ),
-              ),
+              child: DestPin(dest.name),
             ),
             Marker(
               point: position,
-              width: 22,
-              height: 22,
-              child: IgnorePointer(
-                child: Semantics(
-                  label: '내 위치',
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF2A7DE1),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: Colors.white, width: 3),
-                    ),
-                  ),
-                ),
-              ),
+              width: 44,
+              height: 44,
+              child: const MeDot(),
             ),
           ],
         ),
         NameLayer(
           places: [
-            dest,
             for (final p in campus.places)
               if (p != dest) p,
           ],

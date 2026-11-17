@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jnu_wheel_nav/guidance_map.dart';
 import 'package:jnu_wheel_nav/model.dart';
+import 'package:latlong2/latlong.dart';
 
 import 'helpers.dart';
 
@@ -55,6 +56,74 @@ void main() {
     expect(t.getTopRight(name).dx, greaterThan(t.getTopLeft(name).dx));
     expect(find.byType(TileLayer), findsNothing); // 인터넷 없이 보인다
     expect(find.textContaining('OpenStreetMap'), findsOneWidget);
+    final opts = t.widget<FlutterMap>(find.byType(FlutterMap)).options;
+    expect(opts.backgroundColor, const Color(0xFFF3F4F6));
+    final roads = t
+        .widgetList<PolylineLayer>(find.byType(PolylineLayer))
+        .first
+        .polylines;
+    expect(roads.first.color, const Color(0xFFFFFFFF));
+    expect(roads.first.strokeWidth, 5);
+    expect(roads.first.strokeWidth + roads.first.borderStrokeWidth, 8);
+    expect(roads.first.borderColor, const Color(0xFFE1E4E8));
+    final polys = t
+        .widgetList<PolygonLayer>(find.byType(PolygonLayer))
+        .toList();
+    expect(
+      polys[0].polygons.single.color,
+      const Color(0xFFC3C8D0),
+    ); // 그림자가 먼저(아래)
+    expect(polys[1].polygons.single.color, const Color(0xFFD9DDE4));
+    expect(polys[1].polygons.single.borderColor, const Color(0xFFB8BEC8));
+    final label = t.widget<Text>(find.text('정문')).style!;
+    expect(label.color, const Color(0xFF4A4F57));
+    expect(label.fontWeight, FontWeight.w700);
+    expect(label.shadows, isNotEmpty);
+  });
+
+  Future<void> pumpDest(
+    WidgetTester t,
+    Place Function(Campus) dest,
+    LatLng position,
+  ) async {
+    final c = tinyCampus();
+    final (graph, route) = net(c.nodes, c.edges, m(0, 0), m(0, 300));
+    await t.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: GuidanceMap(
+            controller: MapController(),
+            campus: c,
+            graph: graph,
+            buildings: const [],
+            route: route,
+            dest: dest(c),
+            position: position,
+            heading: 0,
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+  }
+
+  testWidgets('목적지 이름은 핀에 한 번만 보인다', (t) async {
+    final sem = t.ensureSemantics();
+    await pumpDest(t, (c) => c.places[1], m(0, 290));
+    expect(
+      find.descendant(of: find.byType(DestPin), matching: find.text('도서관')),
+      findsOneWidget,
+    );
+    expect(find.text('도서관'), findsOneWidget);
+    expect(find.byType(MeDot), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('내 위치')), findsOneWidget);
+    sem.dispose();
+  });
+
+  testWidgets('목적지 이름이 길어도 핀이 넘치지 않는다', (t) async {
+    await pumpDest(t, (_) => Place('가' * 40, m(0, 10)), m(0, 0));
+    expect(t.takeException(), isNull);
+    expect(t.getSize(find.byType(DestPin)).width, lessThanOrEqualTo(160));
   });
 
   testWidgets('세로 화면에서 돌아가 있어도 아래쪽(지나온 쪽) 건물 이름이 남는다', (t) async {
@@ -72,14 +141,14 @@ void main() {
             graph: graph,
             buildings: const [],
             route: route,
-            dest: Place('뒤쪽', m(-100, 0)), // 동쪽으로 가는 중이라 화면 아래
-            position: m(0, 0),
+            dest: c.places[1],
+            position: m(100, 0), // 정문(0,0)은 동쪽으로 가는 중이라 화면 아래
             heading: 90,
           ),
         ),
       ),
     );
     await t.pump();
-    expect(find.text('뒤쪽'), findsOneWidget);
+    expect(find.text('정문'), findsOneWidget);
   });
 }
