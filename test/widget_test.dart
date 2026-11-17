@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jnu_wheel_nav/guidance_map.dart';
 import 'package:jnu_wheel_nav/main.dart';
 import 'package:jnu_wheel_nav/model.dart';
 import 'package:jnu_wheel_nav/store.dart';
+import 'package:jnu_wheel_nav/survey_tab.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'helpers.dart';
 
-Future<void> open(WidgetTester t, {Campus? campus}) async {
+Future<void> open(
+  WidgetTester t, {
+  Campus? campus,
+  List<SurveyRecord> bundled = const [],
+}) async {
   SharedPreferences.setMockInitialValues({});
   await t.pumpWidget(
     App(
       campus: campus ?? tinyCampus(),
-      bundled: const [],
+      bundled: bundled,
       local: const [],
       tileProvider: BlankTiles(),
     ),
@@ -105,6 +111,48 @@ void main() {
     expect(find.text('기울기는 추정값입니다'), findsOneWidget);
     expect(find.text('수동 휠체어'), findsOneWidget);
     expect(find.text('전동 휠체어'), findsOneWidget);
+  });
+
+  testWidgets('지도 탭은 그림 조각 없이 그리고, 조사 탭만 그림 조각을 쓴다', (t) async {
+    await open(t);
+    expect(find.byType(TileLayer), findsNothing);
+    expect(find.text('정문'), findsOneWidget); // 건물 이름 층
+    final map = MapCamera.of(t.element(find.byType(MarkerLayer)));
+    final center = map.center;
+    await t.tap(find.text('조사'));
+    await t.pumpAndSettle();
+    expect(find.byType(TileLayer), findsOneWidget);
+    expect(find.text('정문'), findsNothing);
+    await t.tap(find.text('지도'));
+    await t.pumpAndSettle();
+    expect(find.byType(TileLayer), findsNothing);
+    expect(MapCamera.of(t.element(find.byType(MarkerLayer))).center, center);
+  });
+
+  testWidgets('계단 표시는 길보다 위에 그린다', (t) async {
+    await open(t, bundled: [rec(Kind.stairs, m(40, 0), m(60, 0))]);
+    final kids = t.widget<FlutterMap>(find.byType(FlutterMap)).children;
+    int at(bool Function(Polyline) f) =>
+        kids.indexWhere((w) => w is PolylineLayer && w.polylines.any(f));
+    final roads = at((p) => p.borderStrokeWidth > 0);
+    final stairs = at((p) => p.color == kindStyle(Kind.stairs).color);
+    expect(roads, greaterThanOrEqualTo(0));
+    expect(stairs, greaterThan(roads));
+  });
+
+  testWidgets('목적지를 고르면 핀에 이름이 나오고 출발점은 동그라미다', (t) async {
+    await open(t);
+    await t.tap(find.textContaining('어디로 갈까요'));
+    await t.pumpAndSettle();
+    await pick(t, '도서관');
+    await t.tap(find.text('출발지 고르기'));
+    await t.pumpAndSettle();
+    await pick(t, '정문');
+    expect(
+      find.descendant(of: find.byType(DestPin), matching: find.text('도서관')),
+      findsOneWidget,
+    );
+    expect(find.byType(StartDot), findsOneWidget);
   });
 
   testWidgets('갈 수 있는 길이 없으면 알려 준다', (t) async {

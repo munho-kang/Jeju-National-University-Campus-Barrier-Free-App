@@ -8,6 +8,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import 'graph.dart';
+import 'guidance_map.dart';
 import 'guidance_screen.dart';
 import 'model.dart';
 import 'route.dart';
@@ -61,7 +62,7 @@ class App extends StatelessWidget {
   /// 테스트에서 인터넷 없이 지도를 띄우려고 바꿔 끼우는 자리. 평소엔 비워 둔다.
   final TileProvider? tileProvider;
 
-  /// 안내 화면에 그리는 건물 윤곽(assets/buildings.json).
+  /// 지도 탭·안내 화면에 그리는 건물 윤곽(assets/buildings.json).
   final List<List<LatLng>> buildings;
 
   /// 안내 음성. 비우면 `Voice()`.
@@ -455,6 +456,10 @@ class _HomePageState extends State<HomePage> {
                       cameraConstraint: CameraConstraint.containCenter(
                         bounds: bounds,
                       ),
+                      // 조사 탭의 타일은 flutter_map 기본 바탕(0xFFE0E0E0)을 쓴다.
+                      backgroundColor: survey
+                          ? const Color(0xFFE0E0E0)
+                          : mapBackground,
                       minZoom: _minZoom,
                       maxZoom: _maxZoom,
                       // 회전은 헷갈리고, 두 번 눌러 확대는 조사 탭의
@@ -469,12 +474,15 @@ class _HomePageState extends State<HomePage> {
                       onTap: (_, p) => _onMapTap(p),
                     ),
                     children: [
-                      TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'kr.jnucapstone3.jnu_wheel_nav',
-                        tileProvider: widget.tileProvider,
-                      ),
+                      if (survey)
+                        TileLayer(
+                          urlTemplate:
+                              'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          userAgentPackageName: 'kr.jnucapstone3.jnu_wheel_nav',
+                          tileProvider: widget.tileProvider,
+                        )
+                      else
+                        ...campusLayers(_graph, widget.buildings),
                       // 굵은 선: 길 찾기가 실제로 막거나(계단) 가파르다고 보는 구간.
                       // 지도 탭에는 막힌 구간만, 조사 탭에는 기록한 선도 함께 보인다.
                       PolylineLayer(
@@ -492,29 +500,17 @@ class _HomePageState extends State<HomePage> {
                           if (showRoute && start != null)
                             Marker(
                               point: start,
-                              width: 28,
-                              height: 28,
-                              child: const IgnorePointer(
-                                child: Icon(
-                                  Icons.trip_origin,
-                                  size: 28,
-                                  color: Color(0xFF2A7DE1),
-                                ),
-                              ),
+                              width: 22,
+                              height: 22,
+                              child: const StartDot(),
                             ),
                           if (showRoute)
                             Marker(
                               point: dest.at,
-                              width: 40,
-                              height: 40,
+                              width: 160,
+                              height: 80,
                               alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
-                              child: const IgnorePointer(
-                                child: Icon(
-                                  Icons.location_on,
-                                  size: 40,
-                                  color: Color(0xFFC0392B),
-                                ),
-                              ),
+                              child: DestPin(dest.name),
                             ),
                           if (survey)
                             ...recordMarkers(
@@ -538,26 +534,19 @@ class _HomePageState extends State<HomePage> {
                           if (me != null)
                             Marker(
                               point: me,
-                              width: 22,
-                              height: 22,
-                              child: IgnorePointer(
-                                child: Semantics(
-                                  label: '내 위치',
-                                  child: DecoratedBox(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF2A7DE1),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 3,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
+                              width: 44,
+                              height: 44,
+                              child: const MeDot(),
                             ),
                         ],
                       ),
+                      if (!survey)
+                        NameLayer(
+                          places: [
+                            for (final p in _campus.places)
+                              if (!showRoute || p != dest) p,
+                          ],
+                        ),
                       const SimpleAttributionWidget(
                         source: Text('OpenStreetMap contributors'),
                       ),
