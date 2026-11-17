@@ -155,7 +155,7 @@ void main() {
   Future<void> pumpNames(
     WidgetTester t,
     List<Place> places, {
-    LatLng? pin,
+    List<Marker> reserved = const [],
     double scale = 1,
   }) async {
     await t.pumpWidget(
@@ -165,7 +165,7 @@ void main() {
           child: Scaffold(
             body: FlutterMap(
               options: MapOptions(initialCenter: m(0, 0), initialZoom: 18),
-              children: [NameLayer(places: places, pin: pin)],
+              children: [NameLayer(places: places, reserved: reserved)],
             ),
           ),
         ),
@@ -188,7 +188,85 @@ void main() {
     final near = Place('옆건물', m(0, 0));
     await pumpNames(t, [near]);
     expect(find.text('옆건물'), findsOneWidget);
-    await pumpNames(t, [near], pin: m(0, 0)); // 핀이 그 자리를 덮는다
+    await pumpNames(
+      t,
+      [near],
+      reserved: [
+        Marker(
+          point: m(0, 0),
+          width: 160,
+          height: 80,
+          alignment: Alignment.topCenter,
+          child: const SizedBox(),
+        ),
+      ],
+    ); // 핀이 그 자리를 덮는다
     expect(find.text('옆건물'), findsNothing);
   });
+
+  testWidgets('F3 급경사 표시와 출발점 자리의 건물 이름도 숨긴다', (t) async {
+    final warn = Marker(
+      point: m(0, 0),
+      width: 32,
+      height: 32,
+      alignment: Alignment.topCenter, // 점 위쪽 상자
+      child: const SizedBox(),
+    );
+    final dot = Marker(
+      point: m(0, 0),
+      width: 22,
+      height: 22,
+      child: const SizedBox(),
+    );
+    // 이름의 중심이 표시 상자 안(점 위 16px / 점 자리)에 오게 둔다.
+    final above = Place('위건물', m(0, 3)), at = Place('점건물', m(0, 0));
+    await pumpNames(t, [above]);
+    expect(find.text('위건물'), findsOneWidget);
+    await pumpNames(t, [above], reserved: [warn]);
+    expect(find.text('위건물'), findsNothing);
+    await pumpNames(t, [at]);
+    expect(find.text('점건물'), findsOneWidget);
+    await pumpNames(t, [at], reserved: [dot]);
+    expect(find.text('점건물'), findsNothing);
+  });
+
+  for (final scale in [1.0, 3.0]) {
+    testWidgets('F4 목적지 핀 끝이 목적지 점에 닿고 글자가 커져도 넘치지 않는다 (x$scale)', (t) async {
+      final p = m(0, 0);
+      await t.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: Scaffold(
+              body: FlutterMap(
+                options: MapOptions(initialCenter: p, initialZoom: 18),
+                children: [
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        point: p,
+                        width: 160,
+                        height: 80,
+                        alignment: Alignment.topCenter,
+                        child: const DestPin('중앙도서관'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await t.pump();
+      expect(t.takeException(), isNull);
+      final camera = MapCamera.of(t.element(find.byType(MarkerLayer)));
+      final point =
+          camera.latLngToScreenOffset(p) +
+          t.getTopLeft(find.byType(FlutterMap));
+      final icon = t.getRect(find.byIcon(Icons.location_on));
+      // 글자 모양 아래쪽 빈칸이 있어 끝은 상자 바닥보다 조금 위. 몇 px 안이면 된다.
+      expect(icon.bottom, closeTo(point.dy, 4));
+    });
+  }
 }

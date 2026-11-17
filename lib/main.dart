@@ -414,6 +414,20 @@ class _HomePageState extends State<HomePage> {
     final me = _me, first = _first;
     final dest = _dest, start = _startPoint, route = _route;
     final showRoute = !survey && dest != null;
+    // 지도 위 경로 표시. 이름이 이 자리를 덮지 않도록 NameLayer에도 넘긴다.
+    final routeOnMap = <Marker>[
+      if (showRoute && route != null) ...routeMarkers(route),
+      if (showRoute && start != null)
+        Marker(point: start, width: 22, height: 22, child: const StartDot()),
+      if (showRoute)
+        Marker(
+          point: dest.at,
+          width: 160,
+          height: 80,
+          alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
+          child: DestPin(dest.name),
+        ),
+    ];
 
     return Scaffold(
       body: SafeArea(
@@ -495,23 +509,7 @@ class _HomePageState extends State<HomePage> {
                         PolylineLayer(polylines: routeLines(route)),
                       MarkerLayer(
                         markers: [
-                          if (showRoute && route != null)
-                            ...routeMarkers(route),
-                          if (showRoute && start != null)
-                            Marker(
-                              point: start,
-                              width: 22,
-                              height: 22,
-                              child: const StartDot(),
-                            ),
-                          if (showRoute)
-                            Marker(
-                              point: dest.at,
-                              width: 160,
-                              height: 80,
-                              alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
-                              child: DestPin(dest.name),
-                            ),
+                          ...routeOnMap,
                           if (survey)
                             ...recordMarkers(
                               records,
@@ -546,7 +544,7 @@ class _HomePageState extends State<HomePage> {
                             for (final p in _campus.places)
                               if (!showRoute || p != dest) p,
                           ],
-                          pin: showRoute ? dest.at : null,
+                          reserved: routeOnMap,
                         ),
                       const SimpleAttributionWidget(
                         source: Text('OpenStreetMap contributors'),

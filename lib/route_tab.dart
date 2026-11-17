@@ -29,7 +29,7 @@ String? warningLine(RouteResult r) {
 
 // ── 지도 위 경로 ──
 
-/// 완만한 구간은 초록 실선, 가파른 구간은 주황 점선 (색만으로 구분하지 않는다).
+/// 완만한 구간은 초록 실선, 가파른 구간은 주황 끊긴 선 (색만으로 구분하지 않는다).
 List<Polyline> routeLines(RouteResult r) {
   if (r.legs.isEmpty) return [];
   // 흰 밑선: 경로 전체를 한 줄로 깔아 길 위에서 또렷하게 한다.

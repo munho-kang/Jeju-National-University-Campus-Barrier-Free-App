@@ -25,6 +25,7 @@ const _labelStyle = TextStyle(
   ],
 );
 
+// 110574 / 111320: 위도 / 경도 1도의 미터 길이(적도 기준). 그림자는 동쪽·남쪽으로 1.5 m.
 LatLng _shifted(LatLng p) => LatLng(
   p.latitude - 1.5 / 110574,
   p.longitude + 1.5 / (111320 * cos(p.latitude * pi / 180)),
@@ -124,22 +125,26 @@ class DestPin extends StatelessWidget {
   Widget build(BuildContext context) => IgnorePointer(
     child: Column(
       mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.end, // 핀 끝이 상자 맨 아래(= 목적지)에 닿게
       children: [
-        Container(
-          constraints: const BoxConstraints(maxWidth: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: const Color(0xFFC0392B),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.5,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 150),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFFC0392B),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ),
@@ -159,11 +164,11 @@ List<int> keepLabels(List<Rect> rects) {
 }
 
 /// 건물 이름. 지도가 돌아도 글자는 바로 선다(돌리는 층으로 감싸지 않는다).
-/// [pin]이 있으면 목적지 핀(160x80, 위 가운데 기준)이 차지한 자리를 먼저 비워 둔다.
+/// [reserved] 표시(목적지 핀·출발점·급경사 표시)가 차지한 자리를 먼저 비워 둔다.
 class NameLayer extends StatefulWidget {
-  const NameLayer({super.key, required this.places, this.pin});
+  const NameLayer({super.key, required this.places, this.reserved = const []});
   final List<Place> places;
-  final LatLng? pin;
+  final List<Marker> reserved;
 
   @override
   State<NameLayer> createState() => _NameLayerState();
@@ -195,12 +200,20 @@ class _NameLayerState extends State<NameLayer> {
     final screen = Offset.zero & camera.nonRotatedSize;
     final rects = <Rect>[];
     final shown = <Place>[];
-    final pin = widget.pin;
-    if (pin != null) {
-      final c = camera.latLngToScreenOffset(pin);
-      rects.add(Rect.fromLTRB(c.dx - 80, c.dy - 80, c.dx + 80, c.dy));
+    for (final k in widget.reserved) {
+      // flutter_map이 표시를 놓는 방식 그대로: 상자 중심 = 점 + 정렬 x 반 크기
+      final c = camera.latLngToScreenOffset(k.point);
+      final a = k.alignment ?? Alignment.center;
+      rects.add(
+        Rect.fromCenter(
+          center: c + Offset(a.x * k.width / 2, a.y * k.height / 2),
+          width: k.width,
+          height: k.height,
+        ),
+      );
     }
     final offset = rects.length;
+    // ponytail: measures every name each frame; cache sizes by name if panning stutters.
     for (final p in widget.places) {
       final c = camera.latLngToScreenOffset(p.at);
       if (!screen.contains(c)) continue;
@@ -257,6 +270,14 @@ class GuidanceMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final pin = Marker(
+      point: dest.at,
+      width: 160,
+      height: 80,
+      alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
+      child: DestPin(dest.name),
+    );
+    final warnings = routeMarkers(route);
     return FlutterMap(
       mapController: controller,
       options: MapOptions(
@@ -278,14 +299,8 @@ class GuidanceMap extends StatelessWidget {
         MarkerLayer(
           rotate: true,
           markers: [
-            ...routeMarkers(route),
-            Marker(
-              point: dest.at,
-              width: 160,
-              height: 80,
-              alignment: Alignment.topCenter, // 핀 끝이 건물을 가리키게
-              child: DestPin(dest.name),
-            ),
+            ...warnings,
+            pin,
             Marker(
               point: position,
               width: 44,
@@ -299,7 +314,7 @@ class GuidanceMap extends StatelessWidget {
             for (final p in campus.places)
               if (p != dest) p,
           ],
-          pin: dest.at,
+          reserved: [pin, ...warnings],
         ),
         const SimpleAttributionWidget(
           source: Text('OpenStreetMap contributors'),
