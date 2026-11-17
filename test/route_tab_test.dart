@@ -1,3 +1,5 @@
+import 'package:flutter/material.dart' show Color, Colors;
+import 'package:flutter_map/flutter_map.dart' show StrokePattern;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:jnu_wheel_nav/graph.dart';
 import 'package:jnu_wheel_nav/model.dart';
@@ -36,6 +38,36 @@ void main() {
         route([rec(Kind.steep, m(40, 0), m(60, 0))], flat, Profile.powered),
       ),
       '가파른 구간 1곳 (20m, 조사자가 급경사로 표시)',
+    );
+  });
+
+  test('경로 선은 흰 밑선 위에 초록, 가파른 곳은 주황 끊긴 선', () {
+    final r = route(
+      [rec(Kind.steep, m(40, 0), m(60, 0))],
+      flat,
+      Profile.powered,
+    );
+    final lines = routeLines(r);
+    expect(lines.first.color, Colors.white);
+    expect(lines.first.strokeWidth, 12);
+    expect(lines.first.points.first, r.legs.first.a);
+    expect(lines.first.points.last, r.legs.last.b);
+    final rest = lines.skip(1);
+    expect(rest.every((l) => l.strokeWidth == 7), isTrue);
+    expect(rest.map((l) => l.color).toSet(), {
+      const Color(0xFF12A150),
+      const Color(0xFFF59F00),
+    });
+    expect(
+      rest
+          .firstWhere((l) => l.color == const Color(0xFFF59F00))
+          .pattern
+          .segments,
+      isNotNull,
+    );
+    expect(
+      rest.firstWhere((l) => l.color == const Color(0xFF12A150)).pattern,
+      const StrokePattern.solid(),
     );
   });
 }

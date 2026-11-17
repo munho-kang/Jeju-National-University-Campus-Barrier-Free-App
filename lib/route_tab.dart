@@ -5,7 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'model.dart';
 import 'route.dart';
 
-const _green = Color(0xFF1A8F3C), _orange = Color(0xFFE08A00);
+const _green = Color(0xFF12A150), _orange = Color(0xFFF59F00);
 
 /// 출발지 고르기에서 "내 위치"를 뜻하는 표식.
 const myLocation = Place('내 위치', LatLng(0, 0));
@@ -31,7 +31,15 @@ String? warningLine(RouteResult r) {
 
 /// 완만한 구간은 초록 실선, 가파른 구간은 주황 점선 (색만으로 구분하지 않는다).
 List<Polyline> routeLines(RouteResult r) {
-  final lines = <Polyline>[];
+  if (r.legs.isEmpty) return [];
+  // 흰 밑선: 경로 전체를 한 줄로 깔아 길 위에서 또렷하게 한다.
+  final lines = <Polyline>[
+    Polyline(
+      points: [r.legs.first.a, ...r.legs.map((l) => l.b)],
+      strokeWidth: 12,
+      color: Colors.white,
+    ),
+  ];
   var points = <LatLng>[];
   var steep = false;
   void flush() {
@@ -39,7 +47,7 @@ List<Polyline> routeLines(RouteResult r) {
     lines.add(
       Polyline(
         points: points,
-        strokeWidth: 6,
+        strokeWidth: 7,
         color: steep ? _orange : _green,
         pattern: steep
             ? StrokePattern.dashed(segments: const [14, 8])
