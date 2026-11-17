@@ -546,6 +546,7 @@ class _HomePageState extends State<HomePage> {
                             for (final p in _campus.places)
                               if (!showRoute || p != dest) p,
                           ],
+                          pin: showRoute ? dest.at : null,
                         ),
                       const SimpleAttributionWidget(
                         source: Text('OpenStreetMap contributors'),

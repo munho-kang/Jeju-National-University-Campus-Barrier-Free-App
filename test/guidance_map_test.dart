@@ -151,4 +151,44 @@ void main() {
     await t.pump();
     expect(find.text('정문'), findsOneWidget);
   });
+
+  Future<void> pumpNames(
+    WidgetTester t,
+    List<Place> places, {
+    LatLng? pin,
+    double scale = 1,
+  }) async {
+    await t.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+          child: Scaffold(
+            body: FlutterMap(
+              options: MapOptions(initialCenter: m(0, 0), initialZoom: 18),
+              children: [NameLayer(places: places, pin: pin)],
+            ),
+          ),
+        ),
+      ),
+    );
+    await t.pump();
+  }
+
+  testWidgets('F1 글자를 키우면 이름 폭도 그만큼 재서, 겹치게 된 이름을 숨긴다', (t) async {
+    // 글자 4개(테스트 글꼴은 12px씩)가 60px 간격: 1배에서는 안 겹치고 2배에서는 겹친다.
+    final places = [Place('가나다라', m(-15, 0)), Place('마바사아', m(15, 0))];
+    await pumpNames(t, places);
+    expect(find.byType(Text), findsNWidgets(2));
+    await pumpNames(t, places, scale: 2);
+    expect(find.byType(Text), findsOneWidget);
+    // 글꼴이 늦게 도착해 다시 재는 부분(systemFonts 알림)은 테스트에서 재현하지 않는다.
+  });
+
+  testWidgets('F2 목적지 핀이 있는 자리의 건물 이름은 숨긴다', (t) async {
+    final near = Place('옆건물', m(0, 0));
+    await pumpNames(t, [near]);
+    expect(find.text('옆건물'), findsOneWidget);
+    await pumpNames(t, [near], pin: m(0, 0)); // 핀이 그 자리를 덮는다
+    expect(find.text('옆건물'), findsNothing);
+  });
 }

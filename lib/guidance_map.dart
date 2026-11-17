@@ -159,26 +159,57 @@ List<int> keepLabels(List<Rect> rects) {
 }
 
 /// 건물 이름. 지도가 돌아도 글자는 바로 선다(돌리는 층으로 감싸지 않는다).
-class NameLayer extends StatelessWidget {
-  const NameLayer({super.key, required this.places});
+/// [pin]이 있으면 목적지 핀(160x80, 위 가운데 기준)이 차지한 자리를 먼저 비워 둔다.
+class NameLayer extends StatefulWidget {
+  const NameLayer({super.key, required this.places, this.pin});
   final List<Place> places;
+  final LatLng? pin;
+
+  @override
+  State<NameLayer> createState() => _NameLayerState();
+}
+
+class _NameLayerState extends State<NameLayer> {
+  @override
+  void initState() {
+    super.initState();
+    // 웹에서는 글꼴이 늦게 도착한다. 도착하면 글자 크기를 다시 잰다.
+    PaintingBinding.instance.systemFonts.addListener(_refresh);
+  }
+
+  @override
+  void dispose() {
+    PaintingBinding.instance.systemFonts.removeListener(_refresh);
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) setState(() {});
+  }
 
   @override
   Widget build(BuildContext context) {
     final camera = MapCamera.of(context);
+    final style = DefaultTextStyle.of(context).style.merge(_labelStyle);
+    final scaler = MediaQuery.textScalerOf(context);
     final screen = Offset.zero & camera.nonRotatedSize;
-    final centers = <Offset>[];
     final rects = <Rect>[];
     final shown = <Place>[];
-    for (final p in places) {
+    final pin = widget.pin;
+    if (pin != null) {
+      final c = camera.latLngToScreenOffset(pin);
+      rects.add(Rect.fromLTRB(c.dx - 80, c.dy - 80, c.dx + 80, c.dy));
+    }
+    final offset = rects.length;
+    for (final p in widget.places) {
       final c = camera.latLngToScreenOffset(p.at);
       if (!screen.contains(c)) continue;
       final tp = TextPainter(
-        text: TextSpan(text: p.name, style: _labelStyle),
+        text: TextSpan(text: p.name, style: style),
+        textScaler: scaler,
         textDirection: TextDirection.ltr,
       )..layout();
       shown.add(p);
-      centers.add(c);
       rects.add(Rect.fromCenter(center: c, width: tp.width, height: tp.height));
       tp.dispose();
     }
@@ -186,11 +217,12 @@ class NameLayer extends StatelessWidget {
       child: Stack(
         children: [
           for (final i in keepLabels(rects))
-            Positioned(
-              left: rects[i].left,
-              top: rects[i].top,
-              child: Text(shown[i].name, style: _labelStyle),
-            ),
+            if (i >= offset)
+              Positioned(
+                left: rects[i].left,
+                top: rects[i].top,
+                child: Text(shown[i - offset].name, style: style),
+              ),
         ],
       ),
     );
@@ -267,6 +299,7 @@ class GuidanceMap extends StatelessWidget {
             for (final p in campus.places)
               if (p != dest) p,
           ],
+          pin: dest.at,
         ),
         const SimpleAttributionWidget(
           source: Text('OpenStreetMap contributors'),
