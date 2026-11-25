@@ -4,6 +4,7 @@
 아이폰·안드로이드·웹에서 같은 코드로 돌아갑니다.
 
 - 설계서: `docs/superpowers/specs/2026-11-10-jnu-wheelchair-nav-design.md`, 이동 중 길 안내는 `docs/superpowers/specs/2026-11-14-guidance-design.md`
+- 지도 자료(길·장소·건물 테두리): © OpenStreetMap contributors, [ODbL](https://opendatacommons.org/licenses/odbl/) 라이선스. 높이 자료: SRTM(미국 지질조사국 공개 자료).
 - 명령어는 모두 **터미널**(맥의 "터미널" 앱)에서, 이 폴더로 이동한 뒤 입력합니다.
   ```
   cd Jeju-National-University-Campus-Barrier-Free-App
